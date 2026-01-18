@@ -1,28 +1,32 @@
 import { useState } from "react";
-import { Dashboard } from "@/app/components/dashboard";
-import { ListeningMode } from "@/app/components/listening-mode";
-import { SoapView } from "@/app/components/soap-view";
-import { ChatAssistant } from "@/app/components/chat-assistant";
-import { PrescriptionReview } from "@/app/components/prescription-review";
-import { DocumentScanner } from "@/app/components/document-scanner";
+import { MVDashboard } from "@/app/components/mv-dashboard";
+import { MVPatients } from "@/app/components/mv-patients";
+import { MVChatSofya } from "@/app/components/mv-chat-sofya";
+import { MVPatientProfile } from "@/app/components/mv-patient-profile";
+import { MVLanding } from "@/app/components/mv-landing";
+import { MVAgenda } from "@/app/components/mv-agenda";
+import { MVNotificacoes } from "@/app/components/mv-notificacoes";
+import { MVConfiguracoes } from "@/app/components/mv-configuracoes";
 
-type Screen = "dashboard" | "listening" | "soap" | "chat" | "prescription" | "scanner";
+type Screen = "landing" | "dashboard" | "patients" | "chat" | "patient-profile" | "agenda" | "notificacoes" | "configuracoes";
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>("dashboard");
+  const [currentScreen, setCurrentScreen] = useState<Screen>("landing");
 
   const handleNavigate = (screen: string) => {
     setCurrentScreen(screen as Screen);
   };
 
   return (
-    <div className="min-h-screen">
-      {currentScreen === "dashboard" && <Dashboard onNavigate={handleNavigate} />}
-      {currentScreen === "listening" && <ListeningMode onNavigate={handleNavigate} />}
-      {currentScreen === "soap" && <SoapView onNavigate={handleNavigate} />}
-      {currentScreen === "chat" && <ChatAssistant onNavigate={handleNavigate} />}
-      {currentScreen === "prescription" && <PrescriptionReview onNavigate={handleNavigate} />}
-      {currentScreen === "scanner" && <DocumentScanner onNavigate={handleNavigate} />}
+    <div>
+      {currentScreen === "landing" && <MVLanding onNavigate={setCurrentScreen} />}
+      {currentScreen === "dashboard" && <MVDashboard onNavigate={setCurrentScreen} />}
+      {currentScreen === "patients" && <MVPatients onNavigate={setCurrentScreen} />}
+      {currentScreen === "chat" && <MVChatSofya onNavigate={setCurrentScreen} />}
+      {currentScreen === "patient-profile" && <MVPatientProfile onNavigate={setCurrentScreen} />}
+      {currentScreen === "agenda" && <MVAgenda onNavigate={setCurrentScreen} />}
+      {currentScreen === "notificacoes" && <MVNotificacoes onNavigate={setCurrentScreen} />}
+      {currentScreen === "configuracoes" && <MVConfiguracoes onNavigate={setCurrentScreen} />}
     </div>
   );
 }
