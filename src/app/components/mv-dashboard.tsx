@@ -188,6 +188,17 @@ export function MVDashboard({ onNavigate }: MVDashboardProps) {
               <button className="hidden md:flex w-10 h-10 bg-[#F5F7FA] rounded-lg items-center justify-center hover:bg-[#E8ECEF] transition-colors">
                 <Bell className="w-5 h-5 text-[#706F6F]" />
               </button>
+              {/* Botão de Ditado Imediato (Voice Mode) */}
+              <button
+                onClick={() => {
+                  console.log('🎤 Botão de microfone clicado! Navegando para listening...');
+                  onNavigate("listening");
+                }}
+                className="w-12 h-12 md:w-14 md:h-14 bg-[#0056D2] rounded-full shadow-lg flex items-center justify-center hover:bg-[#0047B3] transition-colors active:scale-95"
+                title="Ditado Imediato"
+              >
+                <Mic className="w-6 h-6 md:w-7 md:h-7 text-white" />
+              </button>
             </div>
           </div>
         </header>

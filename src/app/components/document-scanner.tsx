@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { ArrowLeft, Camera, Check, X } from "lucide-react";
+import { useState, useRef } from "react";
+import { ArrowLeft, Camera, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { extractHealthInsuranceCard, extractMedicalOrder } from "@/services/kadok";
 
 interface DocumentScannerProps {
   onNavigate: (screen: string) => void;
@@ -9,13 +10,71 @@ interface DocumentScannerProps {
 
 export function DocumentScanner({ onNavigate }: DocumentScannerProps) {
   const [scanned, setScanned] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [documentType, setDocumentType] = useState<'card' | 'order'>('card');
   const [extractedData, setExtractedData] = useState({
-    name: "JOÃO SILVA OLIVEIRA",
-    cpf: "123.456.789-00",
-    insurance: "Unimed Premium",
-    cardNumber: "4567 8901 2345 6789",
-    validity: "12/2026",
+    name: "",
+    cpf: "",
+    insurance: "",
+    cardNumber: "",
+    validity: "",
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    await processDocument(file);
+  };
+
+  const handleCapture = async () => {
+    // Implementar captura de câmera se necessário
+    // Por enquanto, usar file input
+    fileInputRef.current?.click();
+  };
+
+  const processDocument = async (file: File) => {
+    try {
+      setIsProcessing(true);
+      setError(null);
+
+      let result;
+      if (documentType === 'card') {
+        result = await extractHealthInsuranceCard(file);
+        if (result.extracted_data) {
+          setExtractedData({
+            name: result.extracted_data.beneficiary_name || '',
+            cpf: '',
+            insurance: result.extracted_data.provider_name || '',
+            cardNumber: result.extracted_data.card_number || '',
+            validity: result.extracted_data.validity || '',
+          });
+        }
+      } else {
+        result = await extractMedicalOrder(file);
+        if (result.extracted_data) {
+          setExtractedData({
+            name: result.extracted_data.patient_name || '',
+            cpf: '',
+            insurance: '',
+            cardNumber: '',
+            validity: '',
+          });
+        }
+      }
+
+      setScanned(true);
+    } catch (err) {
+      console.error('Error processing document:', err);
+      setError('Erro ao processar documento. Verifique se o arquivo é válido.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F4F6F8]">
@@ -90,31 +149,99 @@ export function DocumentScanner({ onNavigate }: DocumentScannerProps) {
             </ul>
           </div>
 
-          {/* Action Button */}
-          <button
-            onClick={() => setScanned(true)}
-            className="w-full bg-[#0056D2] text-white py-4 rounded-xl font-medium hover:bg-[#0047B3] transition-colors flex items-center justify-center gap-2"
-          >
-            <Camera className="w-5 h-5" />
-            Capturar Documento
-          </button>
+          {/* Document Type Selection */}
+          <div className="mb-4 bg-white rounded-xl p-4">
+            <Label className="text-sm font-medium text-[#1A1A1A] mb-2 block">
+              Tipo de Documento
+            </Label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDocumentType('card')}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                  documentType === 'card'
+                    ? 'bg-[#0056D2] text-white'
+                    : 'bg-[#F4F6F8] text-[#1A1A1A]'
+                }`}
+              >
+                Carteirinha
+              </button>
+              <button
+                onClick={() => setDocumentType('order')}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                  documentType === 'order'
+                    ? 'bg-[#0056D2] text-white'
+                    : 'bg-[#F4F6F8] text-[#1A1A1A]'
+                }`}
+              >
+                Pedido Médico
+              </button>
+            </div>
+          </div>
+
+          {/* File Input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 bg-white border border-gray-200 text-[#1A1A1A] py-4 rounded-xl font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+            >
+              Escolher Arquivo
+            </button>
+            <button
+              onClick={handleCapture}
+              disabled={isProcessing}
+              className="flex-1 bg-[#0056D2] text-white py-4 rounded-xl font-medium hover:bg-[#0047B3] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  Capturar
+                </>
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="px-6 py-6">
-          {/* Success Message */}
-          <div className="bg-[#00C853]/10 border border-[#00C853]/20 rounded-xl p-4 mb-6 flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#00C853] rounded-full flex items-center justify-center flex-shrink-0">
-              <Check className="w-6 h-6 text-white" />
+          {/* Success/Error Message */}
+          {error ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-center gap-3">
+              <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-red-600">
+                  Erro ao processar documento
+                </p>
+                <p className="text-xs text-red-500 mt-1">{error}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-[#00C853]">
-                Documento capturado com sucesso!
-              </p>
-              <p className="text-xs text-[#5E6C84] mt-1">
-                Dados extraídos automaticamente
-              </p>
+          ) : (
+            <div className="bg-[#00C853]/10 border border-[#00C853]/20 rounded-xl p-4 mb-6 flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#00C853] rounded-full flex items-center justify-center flex-shrink-0">
+                <Check className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[#00C853]">
+                  Documento capturado com sucesso!
+                </p>
+                <p className="text-xs text-[#5E6C84] mt-1">
+                  Dados extraídos automaticamente
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Extracted Data Form */}
           <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">

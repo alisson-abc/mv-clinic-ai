@@ -7,8 +7,9 @@ import { MVLanding } from "@/app/components/mv-landing";
 import { MVAgenda } from "@/app/components/mv-agenda";
 import { MVNotificacoes } from "@/app/components/mv-notificacoes";
 import { MVConfiguracoes } from "@/app/components/mv-configuracoes";
+import { ListeningMode } from "@/app/components/listening-mode";
 
-type Screen = "landing" | "dashboard" | "patients" | "chat" | "patient-profile" | "agenda" | "notificacoes" | "configuracoes";
+type Screen = "landing" | "dashboard" | "patients" | "chat" | "patient-profile" | "agenda" | "notificacoes" | "configuracoes" | "listening";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("landing");
@@ -27,6 +28,7 @@ export default function App() {
       {currentScreen === "agenda" && <MVAgenda onNavigate={setCurrentScreen} />}
       {currentScreen === "notificacoes" && <MVNotificacoes onNavigate={setCurrentScreen} />}
       {currentScreen === "configuracoes" && <MVConfiguracoes onNavigate={setCurrentScreen} />}
+      {currentScreen === "listening" && <ListeningMode onNavigate={setCurrentScreen} />}
     </div>
   );
 }

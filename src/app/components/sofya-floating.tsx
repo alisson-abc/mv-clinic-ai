@@ -1,6 +1,7 @@
 import { MessageSquare, Mic, X, Keyboard, Square } from "lucide-react";
 import { useState, useEffect } from "react";
 import svgPaths from "@/imports/svg-quqbpcgsif";
+import { useVoiceChat } from "@/hooks/useVoiceChat";
 
 // Sofya Logo Component
 function SofyaIcon({ className = "w-6 h-6" }: { className?: string }) {
@@ -51,37 +52,73 @@ function VoiceWaveform() {
 
 export function SofyaFloating() {
   const [isOpen, setIsOpen] = useState(false);
-  const [voiceState, setVoiceState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
-  const [transcript, setTranscript] = useState("");
   const [showKeyboard, setShowKeyboard] = useState(false);
-  const [messages, setMessages] = useState<Array<{ type: "user" | "assistant"; text: string }>>([]);
+  const [inputText, setInputText] = useState("");
 
-  // Simulate voice interaction
-  const handleVoiceToggle = () => {
-    if (voiceState === "idle" || voiceState === "speaking") {
-      setVoiceState("listening");
-      setTranscript("");
-      // Simulate STT
-      setTimeout(() => {
-        setTranscript("Como estão os exames da Dona Maria...");
-        setTimeout(() => {
-          setVoiceState("thinking");
-          setTimeout(() => {
-            setMessages([
-              { type: "user", text: "Como estão os exames da Dona Maria do leito 204?" },
-              {
-                type: "assistant",
-                text: "A Dona Maria de Lourdes apresenta uma melhora. A Troponina negativou nas últimas 12 horas e o Hemograma está estável. Porém, a Creatinina subiu levemente para 1.4, o que sugere atenção à hidratação.",
-              },
-            ]);
-            setVoiceState("speaking");
-            setTranscript("");
-          }, 2000);
-        }, 2000);
-      }, 1000);
-    } else if (voiceState === "listening") {
-      setVoiceState("idle");
-      setTranscript("");
+  // Integração com chat de voz real
+  const {
+    isConnected,
+    isRecording,
+    isListening,
+    isSpeaking,
+    transcription,
+    messages: voiceMessages,
+    connect,
+    disconnect,
+    startVoiceMode,
+    stopVoiceMode,
+    error,
+  } = useVoiceChat({
+    strategy: 'sofya',
+    language: 'pt-BR',
+  });
+
+  // Converter mensagens do hook para o formato do componente
+  const messages = voiceMessages.map(msg => ({
+    type: msg.type as "user" | "assistant",
+    text: msg.text,
+  }));
+
+  // Determinar estado visual baseado no estado real
+  const voiceState: "idle" | "listening" | "thinking" | "speaking" = 
+    isSpeaking ? "speaking" :
+    isRecording || isListening ? "listening" :
+    "idle";
+
+  // Conectar quando abrir o Orb (apenas uma vez)
+  useEffect(() => {
+    if (isOpen && !isConnected) {
+      console.log('🎤 Orb aberto, conectando...');
+      connect().catch((err) => {
+        console.warn('⚠️ Erro ao conectar:', err);
+      });
+    } else if (!isOpen) {
+      stopVoiceMode();
+      disconnect();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]); // Apenas isOpen como dependência para evitar múltiplas conexões
+
+  // Atualizar inputText com a transcrição real
+  useEffect(() => {
+    if (transcription) {
+      setInputText(transcription);
+    }
+  }, [transcription]);
+
+  // Handler para toggle de voz
+  const handleVoiceToggle = async () => {
+    try {
+      if (voiceState === "idle" || voiceState === "speaking") {
+        console.log('🎤 Iniciando modo de voz...');
+        await startVoiceMode();
+      } else if (voiceState === "listening") {
+        console.log('⏸️ Parando modo de voz...');
+        stopVoiceMode();
+      }
+    } catch (err) {
+      console.error('❌ Erro ao alternar modo de voz:', err);
+      alert('Erro ao acessar microfone. Verifique as permissões.');
     }
   };
 
@@ -240,9 +277,9 @@ export function SofyaFloating() {
             </div>
 
             {/* Transcript Display */}
-            {transcript && voiceState === "listening" && (
+            {transcription && voiceState === "listening" && (
               <div className="px-5 py-3 bg-white/5 border-t border-white/10 flex-shrink-0">
-                <p className="text-white/80 text-sm text-center italic">{transcript}</p>
+                <p className="text-white/80 text-sm text-center italic">{transcription}</p>
               </div>
             )}
 
@@ -267,10 +304,26 @@ export function SofyaFloating() {
                 <div className="flex items-center gap-3">
                   <input
                     type="text"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && inputText.trim()) {
+                        // Enviar mensagem de texto (implementar se necessário)
+                        setInputText("");
+                        setShowKeyboard(false);
+                      }
+                    }}
                     placeholder="Digite sua pergunta..."
                     className="flex-1 bg-white/10 text-white placeholder:text-white/40 px-4 py-3.5 rounded-xl border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#008C77] text-base"
                   />
                   <button 
+                    onClick={() => {
+                      if (inputText.trim()) {
+                        // Enviar mensagem de texto (implementar se necessário)
+                        setInputText("");
+                        setShowKeyboard(false);
+                      }
+                    }}
                     className="w-14 h-14 bg-gradient-to-r from-[#008C77] to-[#214B63] rounded-xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all"
                   >
                     <MessageSquare className="w-6 h-6 text-white" />

@@ -1,10 +1,14 @@
-import { Home, Users, MessageSquare, Settings, Menu, X, Calendar, Bell, Send, Paperclip, Mic, CheckCircle2, BookOpen, FileText, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { Home, Users, MessageSquare, Settings, Menu, X, Calendar, Bell, Send, Paperclip, Mic, CheckCircle2, BookOpen, FileText, ChevronRight, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import svgPaths from "@/imports/svg-quqbpcgsif";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import imgMVLogo from "figma:asset/f07ce0ef45a6df48f6c586d9ef7ccd7274d5089a.png";
 import { SofyaFloating } from "@/app/components/sofya-floating";
+import { useAskSofya } from "@/hooks/useAskSofya";
+import { useSofyaTranscriber } from "@/hooks/useSofyaTranscriber";
 
 interface MVChatSofyaProps {
   onNavigate: (screen: string) => void;
@@ -36,46 +40,69 @@ interface Message {
 }
 
 export function MVChatSofya({ onNavigate }: MVChatSofyaProps) {
-  const [messages] = useState<Message[]>([
-    {
-      type: "assistant",
-      text: "Olá, Dr. Silva! Sou a Sofya, sua assistente clínica baseada em evidências científicas. Como posso ajudá-lo hoje?",
-      timestamp: "14:30",
-    },
-    {
-      type: "user",
-      text: "Qual é o protocolo atual para tratamento de sepse em pacientes com mais de 65 anos?",
-      timestamp: "14:32",
-    },
-    {
-      type: "assistant",
-      text: "Para o manejo de sepse em pacientes idosos (>65 anos), seguindo o protocolo Surviving Sepsis Campaign 2024 com considerações geriátricas:\n\n**1. Reconhecimento Precoce**\n• qSOFA ≥ 2 ou SOFA ≥ 2 pontos\n• Atenção: idosos podem apresentar sintomas atípicos\n\n**2. Bundle da Primeira Hora (Golden Hour)**\n• Coleta de culturas (antes dos antibióticos)\n• Lactato sérico\n• Antibioticoterapia de amplo espectro\n• Ressuscitação volêmica: 30 ml/kg de cristaloides\n  - Atenção: ajustar volume em pacientes com IC\n\n**3. Antibioticoterapia Empírica**\n• Sem foco definido: Piperacilina-tazobactam 4,5g 6/6h + Vancomicina\n• Foco urinário: Ceftriaxona 2g/dia ou Piperacilina-tazobactam\n• Foco respiratório: Ceftriaxona + Azitromicina\n• Ajustar dose conforme função renal (comum em idosos)\n\n**4. Vasopressores**\n• Noradrenalina se PAM < 65 mmHg após ressuscitação\n• Alvo de PAM pode ser individualizado (considerar HAS prévia)\n\n**5. Controle do Foco Infeccioso**\n• Drenagem/desbridamento se indicado\n• Remoção de dispositivos invasivos\n\n**Considerações Especiais em Idosos:**\n• Maior risco de disfunção orgânica\n• Atenção à função renal e hepática\n• Risco aumentado de delirium\n• Avaliar fragilidade e objetivos de cuidado",
-      references: [
-        { title: "Surviving Sepsis Campaign 2024", page: 12, category: "Guideline Internacional" },
-        { title: "Protocolo Sepse em Idosos - AMIB", page: 8, category: "Consenso Nacional" },
-        { title: "Antimicrobial Therapy in Elderly", page: 23, category: "Revisão Sistemática" },
-      ],
-      timestamp: "14:33",
-    },
-    {
-      type: "user",
-      text: "Qual antibiótico é mais seguro em paciente com clearance de creatinina de 35 ml/min?",
-      timestamp: "14:35",
-    },
-    {
-      type: "assistant",
-      text: "Para paciente com clearance de creatinina de 35 ml/min (Doença Renal Crônica Estágio 3B), as opções mais seguras com ajuste de dose são:\n\n**Opções Preferenciais:**\n\n**1. Ceftriaxona**\n• Dose: 1-2g/dia (não requer ajuste até ClCr >10)\n• Excreção biliar predominante\n• Excelente opção para foco urinário ou respiratório\n• Evitar em pacientes com doença hepática grave\n\n**2. Piperacilina-tazobactam (com ajuste)**\n• ClCr 20-40: 3,375g a cada 6h\n• Espectro amplo\n• Monitorar função renal durante uso\n\n**3. Meropenem (com ajuste)**\n• ClCr 26-50: 1g a cada 12h\n• Reservar para infecções graves/resistentes\n\n**Evitar ou Usar com Extrema Cautela:**\n• Aminoglicosídeos (gentamicina, amicacina) - nefrotóxicos\n• Vancomicina - ajustar dose e monitorar nível sérico\n• Fluoroquinolonas - ajustar dose\n\n**Recomendações Adicionais:**\n• Solicitar função renal basal e controles a cada 48-72h\n• Considerar interconsulta com nefrologista\n• Ajustar doses conforme evolução da função renal\n• Avaliar necessidade de hemodiálise se piora",
-      references: [
-        { title: "Drug Dosing in Renal Impairment - UpToDate", page: 45, category: "Base de Dados" },
-        { title: "Antimicrobianos em Insuficiência Renal", page: 67, category: "Consenso Brasileiro" },
-      ],
-      timestamp: "14:36",
-    },
-  ]);
+  const {
+    messages: apiMessages,
+    isLoading,
+    error,
+    sendMessage,
+    initializeConversation,
+  } = useAskSofya();
+
+  // Hook de transcrição STT
+  const {
+    isRecording,
+    transcription,
+    isProcessing,
+    error: transcriptionError,
+    startTranscription,
+    stopTranscription,
+    clearTranscription,
+  } = useSofyaTranscriber();
 
   const [inputValue, setInputValue] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Converter mensagens da API para o formato do componente
+  const messages: Message[] = apiMessages.map((msg) => ({
+    type: msg.type,
+    text: msg.text,
+    references: msg.references,
+    timestamp: msg.timestamp 
+      ? new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      : new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+  }));
+
+  // Inicializar conversa ao montar
+  useEffect(() => {
+    initializeConversation();
+  }, [initializeConversation]);
+
+  // Atualizar input com transcrição
+  useEffect(() => {
+    if (transcription) {
+      setInputValue(transcription);
+    }
+  }, [transcription]);
+
+  // Handler para botão de microfone
+  const handleMicClick = async () => {
+    if (isRecording) {
+      // Parar gravação
+      await stopTranscription();
+    } else {
+      // Iniciar gravação
+      clearTranscription();
+      setInputValue(''); // Limpar input antes de começar
+      try {
+        await startTranscription();
+      } catch (error) {
+        console.error('Erro ao iniciar transcrição:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+        alert(`Erro ao iniciar transcrição: ${errorMessage}`);
+      }
+    }
+  };
 
   const quickPrompts = [
     "Protocolo de dor torácica",
@@ -269,13 +296,132 @@ export function MVChatSofya({ onNavigate }: MVChatSofyaProps) {
                       : "bg-white border border-gray-100"
                   } rounded-2xl p-4 md:p-5 shadow-sm`}
                 >
-                  <p
-                    className={`text-sm md:text-base leading-relaxed whitespace-pre-line ${
-                      message.type === "user" ? "text-white" : "text-[#1A1D21]"
-                    }`}
-                  >
-                    {message.text}
-                  </p>
+                  {message.type === "assistant" ? (
+                    <div className={`text-sm md:text-base leading-relaxed prose prose-sm md:prose-base max-w-none ${
+                      message.type === "user" ? "prose-invert" : ""
+                    }`}>
+                      {(() => {
+                        // Log do texto que será renderizado
+                        console.log('🎨 Renderizando mensagem do assistente:');
+                        console.log('📏 Tamanho:', message.text.length, 'caracteres');
+                        console.log('📄 Primeiros 200 caracteres:', message.text.substring(0, 200));
+                        console.log('📄 Últimos 200 caracteres:', message.text.substring(Math.max(0, message.text.length - 200)));
+                        
+                        try {
+                          return (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                          // Estilizar parágrafos
+                          p: ({ children }) => (
+                            <p className="mb-3 last:mb-0 text-[#1A1D21]">{children}</p>
+                          ),
+                          // Estilizar negrito
+                          strong: ({ children }) => (
+                            <strong className="font-bold text-[#008C77]">{children}</strong>
+                          ),
+                          // Estilizar itálico
+                          em: ({ children }) => (
+                            <em className="italic text-[#214B63]">{children}</em>
+                          ),
+                          // Estilizar listas
+                          ul: ({ children }) => (
+                            <ul className="list-disc list-inside mb-3 space-y-1 text-[#1A1D21] ml-4">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal list-inside mb-3 space-y-1 text-[#1A1D21] ml-4">{children}</ol>
+                          ),
+                          li: ({ children }) => (
+                            <li className="text-[#1A1D21]">{children}</li>
+                          ),
+                          // Estilizar cabeçalhos
+                          h1: ({ children }) => (
+                            <h1 className="text-xl font-bold mb-2 text-[#008C77]">{children}</h1>
+                          ),
+                          h2: ({ children }) => (
+                            <h2 className="text-lg font-bold mb-2 text-[#008C77]">{children}</h2>
+                          ),
+                          h3: ({ children }) => (
+                            <h3 className="text-base font-bold mb-2 text-[#214B63]">{children}</h3>
+                          ),
+                          // Estilizar código inline
+                          code: ({ children, className }) => {
+                            const isInline = !className;
+                            return isInline ? (
+                              <code className="bg-[#F5F7FA] text-[#E74C3C] px-1.5 py-0.5 rounded text-sm font-mono">
+                                {children}
+                              </code>
+                            ) : (
+                              <code className={className}>{children}</code>
+                            );
+                          },
+                          // Estilizar blocos de código
+                          pre: ({ children }) => (
+                            <pre className="bg-[#F5F7FA] p-3 rounded-lg overflow-x-auto mb-3 text-sm">
+                              {children}
+                            </pre>
+                          ),
+                          // Estilizar links
+                          a: ({ href, children }) => (
+                            <a 
+                              href={href} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-[#008C77] hover:text-[#007A68] underline"
+                            >
+                              {children}
+                            </a>
+                          ),
+                          // Estilizar blockquotes
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-4 border-[#008C77] pl-4 italic my-3 text-[#706F6F]">
+                              {children}
+                            </blockquote>
+                          ),
+                          // Estilizar tabelas
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto my-3">
+                              <table className="min-w-full border-collapse border border-gray-200">
+                                {children}
+                              </table>
+                            </div>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-gray-200 bg-[#F5F7FA] px-3 py-2 text-left font-bold text-[#1A1D21]">
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-gray-200 px-3 py-2 text-[#1A1D21]">
+                              {children}
+                            </td>
+                          ),
+                          // Estilizar linha horizontal
+                          hr: () => (
+                            <hr className="my-4 border-t border-gray-200" />
+                          ),
+                        }}
+                      >
+                        {message.text}
+                      </ReactMarkdown>
+                          );
+                        } catch (error) {
+                          console.error('❌ Erro ao renderizar markdown:', error);
+                          console.error('📄 Texto que causou erro:', message.text);
+                          // Fallback: exibir texto simples em caso de erro
+                          return (
+                            <div className="text-[#1A1D21] whitespace-pre-wrap">
+                              {message.text}
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-sm md:text-base leading-relaxed whitespace-pre-line text-white">
+                      {message.text}
+                    </p>
+                  )}
 
                   {message.references && message.references.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
@@ -339,7 +485,12 @@ export function MVChatSofya({ onNavigate }: MVChatSofyaProps) {
               {quickPrompts.map((prompt, index) => (
                 <button
                   key={index}
-                  className="px-3 md:px-4 py-2 bg-white border border-gray-200 text-[#1A1D21] rounded-lg text-xs md:text-sm font-medium hover:border-[#008C77] hover:text-[#008C77] active:bg-[#F5F7FA] transition-colors whitespace-nowrap flex-shrink-0"
+                  onClick={() => {
+                    setInputValue(prompt);
+                    sendMessage(prompt);
+                  }}
+                  disabled={isLoading}
+                  className="px-3 md:px-4 py-2 bg-white border border-gray-200 text-[#1A1D21] rounded-lg text-xs md:text-sm font-medium hover:border-[#008C77] hover:text-[#008C77] active:bg-[#F5F7FA] transition-colors whitespace-nowrap flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {prompt}
                 </button>
@@ -359,20 +510,71 @@ export function MVChatSofya({ onNavigate }: MVChatSofyaProps) {
                 <Input
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && inputValue.trim() && !isLoading) {
+                      e.preventDefault();
+                      sendMessage(inputValue);
+                      setInputValue("");
+                    }
+                  }}
                   placeholder="Digite sua dúvida clínica baseada em evidências..."
                   className="bg-transparent border-0 focus-visible:ring-0 px-0"
+                  disabled={isLoading}
                 />
               </div>
-              <button className="w-10 h-10 bg-[#F5F7FA] rounded-lg flex items-center justify-center hover:bg-[#E8ECEF] transition-colors">
-                <Mic className="w-5 h-5 text-[#706F6F]" />
+              <button
+                onClick={handleMicClick}
+                disabled={isProcessing || isLoading}
+                className={`
+                  w-10 h-10 rounded-lg flex items-center justify-center transition-all
+                  ${isRecording 
+                    ? 'bg-[#E74C3C] hover:bg-[#C0392B] animate-pulse shadow-lg shadow-[#E74C3C]/50' 
+                    : 'bg-[#F5F7FA] hover:bg-[#E8ECEF]'
+                  }
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}
+                title={isRecording ? 'Parar gravação' : 'Iniciar gravação'}
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-5 h-5 text-[#706F6F] animate-spin" />
+                ) : (
+                  <Mic className={`w-5 h-5 ${isRecording ? 'text-white' : 'text-[#706F6F]'}`} />
+                )}
               </button>
-              <button className="w-12 h-12 bg-[#008C77] rounded-lg flex items-center justify-center hover:bg-[#007A68] transition-colors shadow-lg">
-                <Send className="w-5 h-5 text-white" />
+              <button
+                onClick={() => {
+                  if (inputValue.trim() && !isLoading) {
+                    sendMessage(inputValue);
+                    setInputValue("");
+                  }
+                }}
+                disabled={!inputValue.trim() || isLoading}
+                className="w-12 h-12 bg-[#008C77] rounded-lg flex items-center justify-center hover:bg-[#007A68] transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 text-white animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5 text-white" />
+                )}
               </button>
             </div>
-            <p className="text-xs text-[#706F6F] mt-3 text-center">
-              Todas as respostas são baseadas em literatura médica comprovada e protocolos atualizados
-            </p>
+            <div className="mt-3">
+              {isRecording && (
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="w-2 h-2 bg-[#E74C3C] rounded-full animate-pulse"></div>
+                  <p className="text-xs text-[#E74C3C] font-medium">Gravando... Fale agora</p>
+                </div>
+              )}
+              {isProcessing && !isRecording && (
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Loader2 className="w-3 h-3 text-[#008C77] animate-spin" />
+                  <p className="text-xs text-[#008C77] font-medium">Processando transcrição...</p>
+                </div>
+              )}
+              <p className="text-xs text-[#706F6F] text-center">
+                Todas as respostas são baseadas em literatura médica comprovada e protocolos atualizados
+              </p>
+            </div>
           </div>
         </div>
       </div>
